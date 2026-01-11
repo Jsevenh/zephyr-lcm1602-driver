@@ -130,8 +130,16 @@ int  lcm1602_init(const struct device *dev)
 
     
     
-    // Function Set: 2 lines, 5x8 font (0x28)
-    lcd_write_4bit(dev,LCD_FUNCTION_4BIT | LCD_FUNCTION_2LINE, true); 
+    // Function Set: 2 lines, 5x8 font (0x20)
+     const struct lcm1602_config *cfg=(const struct lcm1602_config*)dev->config;
+     if(cfg-> num_lines==2)
+     {
+        lcd_write_4bit(dev,LCD_FUNCTION_SET|LCD_FUNCTION_4BIT | LCD_FUNCTION_2LINE, true);
+     }
+     else{
+        lcd_write_4bit(dev,LCD_FUNCTION_SET|LCD_FUNCTION_4BIT | LCD_FUNCTION_1LINE, true);
+     }
+     
     
     // Display Control: Display ON, Cursor OFF, Blink OFF (0x0C)
     lcd_write_4bit(dev,LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF , true);
@@ -141,7 +149,7 @@ int  lcm1602_init(const struct device *dev)
     k_msleep(2); // Clear command needs ~1.6ms to execute
 
     // Entry Mode: Increment cursor, no shift (0x06)
-    lcd_write_4bit(dev,LCD_ENTRY_MODE_SET | LCD_ENTRYLEFT, true);
+    lcd_write_4bit(dev,LCD_ENTRY_MODE_SET | LCD_ENTRYRIGHT, true);
 
    return 0; // for now 
 }
@@ -154,34 +162,58 @@ int  lcm1602_init(const struct device *dev)
  */
 int lcd_cursor_blink(const struct device *dev,enum state state)
 {
-    if(state)
+    int err=0;
+    switch(state)
     {
-        lcd_write_4bit(dev,LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKON, true);
+        case on:
+            err=lcd_write_4bit(dev,LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKON, true);
+            break;
+        case off:
+            err=lcd_write_4bit(dev,LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKOFF, true);
+            break;
+        default: 
+            break;
     }
-    else{
-        lcd_write_4bit(dev,LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKOFF, true);
-    }
-    return 0; // for now 
+    
+    return err; 
 }
 
 
 //----------------------------------------------------
 //shift display 
 
- int lcd_shift_display(const struct device *dev,enum shift_dir dir)
- {
+int lcd_cursor_shift(const struct device *dev,enum shift_dir dir)
+{
+    int err=0;
     switch (dir)
     {
     case left:
-       lcd_write_4bit(dev,LCD_SHIFT_DISPLAY_LEFT,true);
+       err=lcd_write_4bit(dev,LCD_SHIFT_CURSOR_LEFT,true);
         break;
     case right:
-        //Todo
+       err=lcd_write_4bit(dev,LCD_SHIFT_CURSOR_RIGHT,true);
         break;
     default:
         break;
     }
-    return 0 ;
+    return err;
+
+}
+ int lcd_display_shift(const struct device *dev,enum shift_dir dir)
+ {
+    int err=0;
+    switch (dir)
+    {
+    case left:
+       err=lcd_write_4bit(dev,LCD_SHIFT_DISPLAY_LEFT,true);
+        break;
+    case right:
+       err=lcd_write_4bit(dev,LCD_SHIFT_DISPLAY_RIGHT,true);
+        break;
+    default:
+        break;
+    }
+    return err;
  }
 
 //------------------------------------------
@@ -209,6 +241,7 @@ int lcd_cursor_blink(const struct device *dev,enum state state)
  * @brief This function sets the location of the cursor
  * 
  *   i.e  DDRAM address
+ * @param *dev pointer to device structure
  * @param row row of display either 0 or 1
  * @param col column to write character at between 0 and 39
  * 
@@ -216,18 +249,36 @@ int lcd_cursor_blink(const struct device *dev,enum state state)
 int lcd_set_cursor(const struct device *dev,uint8_t row,uint8_t col)
 {
     //ensure rows are not greater than 2
-    if(row<=1)
+    const struct  lcm1602_config *const cfg=(const struct lcm1602_cfg*)dev->config;
+    //in 1 line mode DDRAM address range [0x00 ,0x4f]
+    // in 2 line mode  1st line DDRAM address range [0x00,0x27] , 2nd line address range [0x40, 0x67]
+    if (cfg->num_lines == 2)
     {
-        if(row==1)
-    {
-        //addr range is between 0x40 to 0x67
-        col=col+0x40;
-    }
-    lcd_write_4bit(dev,LCD_SET_DDRAM_ADDR|col,true);
-    }
-  
-    return 0;
+        // ensure the row  and column  are within range 
+        if (row <= 1 && col <=39)
+        {   
+            if (row == 1)
+            {
+                // addr range is between 0x40 to 0x67
+                col = col + 0x40;
+            }
 
+        }
+        else{
+            return -EINVAL;
+        }
+
+    }
+    if(cfg->num_lines == 1 )
+    {
+        if(row>1 || col>0x4f)
+        {
+            return -EINVAL;
+        }
+    }
+    lcd_write_4bit(dev, LCD_SET_DDRAM_ADDR | col, true);
+   
+    return 0;
 }
 
 
@@ -327,7 +378,7 @@ int lcd_backlight(const struct device *dev,enum state st)
 // }
 static DEVICE_API(lcm1602,lcm1602_api)={
     .cursor_blink=&lcd_cursor_blink,
-    .shift_display=&lcd_shift_display,
+    .shift_display=&lcd_display_shift,
     .print=&lcd_print,
     .set_cursor=&lcd_set_cursor,
     .create_custom_char=&lcd_create_custom_char,
@@ -335,7 +386,9 @@ static DEVICE_API(lcm1602,lcm1602_api)={
     .clear=&lcd_clear,
     .home=&lcd_home,
     .cursor=&lcd_cursor,
-    .backlight=&lcd_backlight
+    .backlight=&lcd_backlight,
+    .shift_cursor=&lcd_cursor_shift,
+   
 };
 static inline int z_impl_lcd_print(const struct device *dev,char *character,int len)
 {
@@ -357,7 +410,7 @@ static inline int z_impl_lcd_cursor_blink(const struct device *dev,enum state st
     return DEVICE_API_GET(lcm1602,dev)->cursor_blink(dev,state);
 }
 
-static inline int z_impl_lcd_shift_display(const struct device *dev,enum shift_dir dir)
+static inline int z_impl_lcd_display_shift(const struct device *dev,enum shift_dir dir)
 {
     __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602,dev));
     return DEVICE_API_GET(lcm1602,dev)->shift_display(dev,dir);
@@ -391,6 +444,12 @@ static inline int z_impl_lcd_backlight(const struct device *dev,enum state st)
     __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602,dev));
     return DEVICE_API_GET(lcm1602,dev)->backlight(dev,st);
 }
+static inline int z_impl_lcd_cursor_shift(const struct device *dev,enum shift_dir dir)
+{
+    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602,dev));
+    return DEVICE_API_GET(lcm1602,dev)->shift_cursor(dev,dir);
+}
+
 
 #define LCM1602_DEFINE(inst) \
     static const struct lcm1602_config lcm1602_config##inst={ \

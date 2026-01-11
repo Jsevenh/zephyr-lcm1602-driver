@@ -31,8 +31,10 @@ p7->D7
 
 #define LCD_FUNCTION_8BIT     0X30
 #define LCD_FUNCTION_4BIT   0X20
-#define LCD_FUNCTION_2LINE  0x08
-#define LCD_5X8_DOTS        
+#define LCD_FUNCTION_SET    0x20
+#define LCD_FUNCTION_2LINE  0x28
+#define LCD_FUNCTION_1LINE  0x20
+#define LCD_5X8_DOTS        0x20
 #define LCD_5X11_DOTS   0x04
 
 /* I2C LCD Pin Mapping (PCF8574) */
@@ -41,7 +43,10 @@ p7->D7
 #define LCD_EN_PIN           0x04  /* P2 - Enable */
 #define LCD_BACKLIGHT_PIN    0x08  /* P3 - Backlight */
 
-#define LCD_ENTRYLEFT 0x02
+#define LCD_ENTRYRIGHT 0x06
+#define LCD_ENTRYLEFT   0x04
+#define LCD_SHIFT_ENTIRE_DISPLAY_RIGHT 0x05 
+#define LCD_SHIFT_ENTIRE_DISPLAY_LEFT  0x04
 
 #define LCD_DISPLAYON 0x04
 #define LCD_CURSOROFF 0x00
@@ -51,6 +56,9 @@ p7->D7
 #define LCD_DISPLAYCONTROL 0x08
 
 #define LCD_SHIFT_DISPLAY_LEFT 0x18
+#define LCD_SHIFT_DISPLAY_RIGHT 0x1c
+#define LCD_SHIFT_CURSOR_LEFT 0x10
+#define LCD_SHIFT_CURSOR_RIGHT 0x14
 enum shift_dir
 {
     left,
@@ -161,6 +169,13 @@ __subsystem struct lcm1602_driver_api
      * @retval -errno for failure
      */
     int (*home)(const struct device *dev);
+
+    /***
+     * @brief shift cursor either left or right s
+     */
+    int (*shift_cursor)(const struct device *dev,enum shift_dir dir);
+
+   
 };
 struct lcm1602_config{
     struct i2c_dt_spec i2c;
@@ -173,7 +188,7 @@ struct lcm1602_data
 };
 
 int lcd_cursor_blink(const struct device *dev,enum state state);
-int lcd_shift_display(const struct device *dev,enum shift_dir dir);
+int lcd_display_shift(const struct device *dev,enum shift_dir dir);
 int lcd_print(const struct device *dev,char *character,int len);
 int lcd_set_cursor(const struct device *dev,uint8_t row,uint8_t col);
 int lcd_create_custom_char(const struct device *dev,char *rows,uint8_t addr);
@@ -182,5 +197,7 @@ int lcd_home(const struct device *dev);
 int lcd_cursor(const struct device *dev, enum state state);
 int lcd_backlight(const struct device *dev,enum state st);
 int  lcd_print_custom(const struct device *dev,uint8_t addr);
+int lcd_cursor_shift(const struct device *dev,enum shift_dir dir);
+
 
 #endif
