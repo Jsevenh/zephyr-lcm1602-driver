@@ -1,0 +1,13 @@
+description: number of display lines either 1 or 2
+compatible: "lcm1602"
+
+include: base.yaml
+on-bus: i2c
+properties:
+  num_lines:
+    type: int
+    enum:
+      - 1
+      - 2
+    default: 2
+    

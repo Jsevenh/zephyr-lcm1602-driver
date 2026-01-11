@@ -1,0 +1,6 @@
+name: lcm1602
+build: 
+  cmake: .
+  kconfig: Kconfig
+  settings:
+    dts_root: .

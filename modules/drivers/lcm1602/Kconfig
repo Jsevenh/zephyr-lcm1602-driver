@@ -1,0 +1,7 @@
+config LCM1602
+    bool "LCM1602 I2C LCD driver"
+    default n
+    depends on I2C
+    help
+      Enable the LCM1602 character LCD driver.
+      This driver usually communicates via an I2C I/O expander.
