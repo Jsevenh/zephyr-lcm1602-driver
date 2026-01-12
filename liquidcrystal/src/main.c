@@ -18,7 +18,7 @@ int main(void)
 	
 	//  }
 	lcd_cursor(lcm1602,on);
-	lcd_cursor_blink(lcm1602,on);
+	lcd_cursor_blink(lcm1602,off);
 	
 	 char name[]="zephyr driver api";
 	 for (int i=0;i<strlen(name);++i)
@@ -40,8 +40,8 @@ int main(void)
 			 0b00000};
 
 	 lcd_create_custom_char(lcm1602,kite, 0);
-	 lcd_set_cursor(lcm1602,1, 10);
+	 lcd_set_cursor(lcm1602,1, 1);
 	 lcd_print_custom(lcm1602,0);
-	lcd_display_shift(lcm1602,left);
+	
 	 return 0;
 }

@@ -182,9 +182,11 @@ struct lcm1602_config{
     uint8_t num_lines;
 };
 
+
 struct lcm1602_data
 {
     uint8_t lcd_backlight_state;
+    uint8_t cursor_position ;// lower nibble is the row value while the upper nibble is the column
 };
 
 int lcd_cursor_blink(const struct device *dev,enum state state);
