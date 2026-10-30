@@ -1,12 +1,13 @@
-#ifndef LCM1602_API
-#define LCM1602_API
+#ifndef AUXDISPLAY_LM1602_H
+#define AUXDISPLAY_LM1602_H
 
 
 #include<zephyr/device.h>
 #include<zephyr/toolchain.h>
 #include<stdbool.h>
 #include<zephyr/drivers/i2c.h>
-
+#include <zephyr/drivers/auxdisplay.h>
+#include<math.h>
 //connections 
 /*
 p0->RS
@@ -20,45 +21,58 @@ p7->D7
 
 */
 
-#define LCD_CLEAR_DISPLAY    0x01
-#define LCD_RETURN_HOME      0x02
-#define LCD_ENTRY_MODE_SET   0x04
-#define LCD_DISPLAY_CONTROL  0x08
-#define LCD_CURSOR_SHIFT     0x10
-#define LCD_FUNCTION_SET     0x20
-#define LCD_SET_CGRAM_ADDR   0x40
-#define LCD_SET_DDRAM_ADDR   0x80
 
-#define LCD_FUNCTION_8BIT     0X30
-#define LCD_FUNCTION_4BIT   0X20
-#define LCD_FUNCTION_SET    0x20
-#define LCD_FUNCTION_2LINE  0x28
-#define LCD_FUNCTION_1LINE  0x20
-#define LCD_5X8_DOTS        0x20
-#define LCD_5X11_DOTS   0x04
 
-/* I2C LCD Pin Mapping (PCF8574) */
-#define LCD_RS_PIN           0x01  /* P0 - Register Select */
-#define LCD_RW_PIN           0x02  /* P1 - Read/Write */
-#define LCD_EN_PIN           0x04  /* P2 - Enable */
-#define LCD_BACKLIGHT_PIN    0x08  /* P3 - Backlight */
+/* --- Basic Commands --- */
+#define AUXDISPLAY_CLEAR_DISPLAY        0x01
+#define AUXDISPLAY_RETURN_HOME          0x02
 
-#define LCD_ENTRYRIGHT 0x06
-#define LCD_ENTRYLEFT   0x04
-#define LCD_SHIFT_ENTIRE_DISPLAY_RIGHT 0x05 
-#define LCD_SHIFT_ENTIRE_DISPLAY_LEFT  0x04
+/* --- Entry Mode Set --- */
+#define AUXDISPLAY_ENTRY_MODE_SET       (1 << 2)
+// shift  cursor on read/write 
+#define AUXDISPLAY_INCREMENT_DDRAM_ADDR_RW (AUXDISPLAY_ENTRY_MODE_SET | (1 << 1))
+#define AUXDISPLAY_DECREMENT_DDRAM_ADDR_RW (AUXDISPLAY_ENTRY_MODE_SET )
+// shift entire display depending on above configurations 
+#define AUXDISPLAY_SHIFT_DISPLAY_RW         (AUXDISPLAY_ENTRY_MODE_SET ) |(1<<0)
 
-#define LCD_DISPLAYON 0x04
-#define LCD_CURSOROFF 0x00
-#define LCD_BLINKOFF  0x00
-#define LCD_CURSORON 0x02
-#define LCD_BLINKON 0x01
-#define LCD_DISPLAYCONTROL 0x08
+/* --- Display Control (On/Off, Cursor, Blink) --- */
+#define AUXDISPLAY_DISPLAY_CONTROL      (1 << 3)
+#define AUXDISPLAY_ON                   (AUXDISPLAY_DISPLAY_CONTROL | (1 << 2))
+#define AUXDISPLAY_OFF                  AUXDISPLAY_DISPLAY_CONTROL
+#define AUXDISPLAY_CURSOR_ON            (AUXDISPLAY_DISPLAY_CONTROL | (1 << 1))
+#define AUXDISPLAY_CURSOR_OFF           AUXDISPLAY_DISPLAY_CONTROL
+#define AUXDISPLAY_CURSOR_BLINK_ON      (AUXDISPLAY_DISPLAY_CONTROL | (1 << 0))
+#define AUXDISPLAY_CURSOR_BLINK_OFF     AUXDISPLAY_DISPLAY_CONTROL
 
-#define LCD_SHIFT_DISPLAY_LEFT 0x18
-#define LCD_SHIFT_DISPLAY_RIGHT 0x1c
-#define LCD_SHIFT_CURSOR_LEFT 0x10
-#define LCD_SHIFT_CURSOR_RIGHT 0x14
+/* --- Cursor or Display Shift --- */
+#define AUXDISPLAY_SHIFT_CONTROL        (1 << 4)
+#define AUXDISPLAY_DISPLAY_SHIFT_RIGHT  (AUXDISPLAY_SHIFT_CONTROL | (1 << 3) | (1 << 2))
+#define AUXDISPLAY_DISPLAY_SHIFT_LEFT   (AUXDISPLAY_SHIFT_CONTROL | (1 << 3))
+#define AUXDISPLAY_CURSOR_SHIFT_LEFT    AUXDISPLAY_SHIFT_CONTROL
+#define AUXDISPLAY_CURSOR_SHIFT_RIGHT   (AUXDISPLAY_SHIFT_CONTROL | (1 << 2))
+
+/* --- Function Set --- */
+#define AUXDISPLAY_FUNCTION_SET         (1 << 5)
+#define AUXDISPLAY_FUNCTION_8BIT        (AUXDISPLAY_FUNCTION_SET | (1 << 4))
+#define AUXDISPLAY_FUNCTION_4BIT        AUXDISPLAY_FUNCTION_SET
+#define AUXDISPLAY_FUNCTION_2LINE       (AUXDISPLAY_FUNCTION_SET | (1 << 3))
+#define AUXDISPLAY_FUNCTION_1LINE       AUXDISPLAY_FUNCTION_SET
+#define AUXDISPLAY_FUNCTION_5X8         AUXDISPLAY_FUNCTION_SET
+#define AUXDISPLAY_FUNCTION_5X11        (AUXDISPLAY_FUNCTION_SET | (1 << 2))
+
+/* --- CGRAM & DDRAM Addressing --- */
+#define AUXDISPLAY_SET_CGRAM_ADDR       (1 << 6)
+#define AUXDISPLAY_SET_DDRAM_ADDR       (1 << 7)
+
+/* --- I2C Pin Mapping --- */
+#define AUXDISPLAY_RS_PIN               0x01  /* P0 - Register Select */
+#define AUXDISPLAY_RW_PIN               0x02  /* P1 - Read/Write */
+#define AUXDISPLAY_EN_PIN               0x04  /* P2 - Enable */
+#define AUXDISPLAY_BACKLIGHT_PIN        0x08  /* P3 - Backlight */
+
+
+
+
 enum shift_dir
 {
     left,
@@ -69,137 +83,46 @@ enum state
     on,
     off
 };
-__subsystem struct lcm1602_driver_api
 
-{
-    /***
-     * @brief set the state of the cursor either on or off 
-     * 
-     * @param *dev pointer to the device instance 
-     * @param  state true to turn cursor on , false to turn it off
-     * 
-     * @retval 0 if successful
-     * @retval -errno for failure 
-     */
-    int (*cursor_blink)(const struct device *dev,enum state state);
-   
-    /***
-     * @brief turn cursor on and off 
-     */
-    int (*cursor)(const struct device *dev, enum state st);
-
-    /***
-     * @brief turn backlight on or off 
-     */
-    int  (*backlight)(const struct device *dev,enum state st);
-    /***
-     * @brief shifts entire display 
-     * 
-     * @param *dev pointer to device instance 
-     * @param  dir direction to shift display  can either be left of right
-     * @retval 0 if successful
-     * @retval -errno for failure 
-     */
-    int (*shift_display)(const struct device *dev,enum shift_dir dir);
-    
-    /***
-     * @brief writes characters data to the DDRAM address
-    *  specified by the set cursor function
-     * 
-     * @param pointer to the device intstance
-     * @param char* pointer to character array
-     * @param len length of character array 
-     * 
-     * @retval 0 if successful
-     * @retval -errno for failure
-     */
-    int (*print)(const struct device *dev,char *character,int len);
-
-    /***
-     * @brief location to set cursor 
-     * 
-     * @param *dev pointer to device instance
-     * @param row row to set cursor at 
-     * @param col column to set cursor at 
-     * 
-     * @retval 0 if successful
-     * @retval -errno for failure
-     * @
-     */
-    int (*set_cursor)(const struct device *dev,uint8_t row,uint8_t col);
-    /***
-     * @brief store values for a custom character in memory 
-     * 
-     * @param *dev pointer to a device instance 
-     * @param  *rows a pointer to a 5X8 array with the character definition 
-     *          see ref manual on how to define a custom char 
-     * @param addr CCRAM  address to write to can be a value between 0 and 7 
-     *  only seven custom characters can be supported address greater than 7 
-     *  will generate and error 
-     * 
-     * @retval 0 if successful
-     * @retval -errno for failure
-     */
-    int   (*create_custom_char)(const struct device *dev,char *rows,uint8_t addr);
-
-    /***
-     * @brief print custom character at the current cursor location 
-     * 
-     * @param addr address of the CGRAM crange [0,7] out of range error will be thrown 
-     *  for values not in range 
-     * 
-     * @retval 0 if successful
-     * @retval -errno for failure
-     */
-    int (*print_custom)(const struct device *dev,uint8_t addr);
-
-    /***
-     * @brief clear entire display
-     * 
-     * @param *dev pointer to device instance 
-     */
-    int (*clear)(const struct device *dev);
-
-    /***
-     * @brief move cursor ot home position 
-     * 
-     * @param *dev pointer to device instance 
-     * 
-     * @retval 0 if successful
-     * @retval -errno for failure
-     */
-    int (*home)(const struct device *dev);
-
-    /***
-     * @brief shift cursor either left or right s
-     */
-    int (*shift_cursor)(const struct device *dev,enum shift_dir dir);
-
-   
-};
 struct lcm1602_config{
     struct i2c_dt_spec i2c;
-    uint8_t num_lines;
+    uint8_t display_mode; // can either be  2 line or 1 line 
+    uint8_t idl;  // interface data length  either 8 bit or 4 bit 
+    const char *dots;
+
 };
 
 
 struct lcm1602_data
 {
-    uint8_t lcd_backlight_state;
-    uint8_t cursor_position ;// lower nibble is the row value while the upper nibble is the column
+    uint8_t backlight;
+    uint8_t x,y ;
+    // registers 
+    /** 
+     * @brief entry_mode stores bit states of    
+                1. increment or decrement of cursor position on write 
+                2. shifting display left or right on write 
+
+     */
+    uint8_t entry_mode;
+
+    /** 
+    * @brief display_control store bit info on 
+    *        1. display on/off
+    *        2. cursor on/off
+    *        3. cursor blink on/off
+    */
+   uint8_t display_control;
+   /**
+    * @brief funstion_set: stores bit info on 
+    *       1.  data length 8/4 bit 
+    *       2.  line numbers 
+    *       3.  5x8 or 5x11 dots 
+    */
+   uint8_t  function_set ;
 };
 
-int lcd_cursor_blink(const struct device *dev,enum state state);
-int lcd_display_shift(const struct device *dev,enum shift_dir dir);
-int lcd_print(const struct device *dev,char *character,int len);
-int lcd_set_cursor(const struct device *dev,uint8_t row,uint8_t col);
-int lcd_create_custom_char(const struct device *dev,char *rows,uint8_t addr);
-int lcd_clear(const struct device *dev);
-int lcd_home(const struct device *dev);
-int lcd_cursor(const struct device *dev, enum state state);
-int lcd_backlight(const struct device *dev,enum state st);
-int  lcd_print_custom(const struct device *dev,uint8_t addr);
-int lcd_cursor_shift(const struct device *dev,enum shift_dir dir);
 
 
-#endif
+
+#endif  /* AUXDISPLAY_LM1602_H */

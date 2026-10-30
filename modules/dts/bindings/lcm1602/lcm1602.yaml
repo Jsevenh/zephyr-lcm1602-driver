@@ -4,10 +4,26 @@ compatible: "lcm1602"
 include: base.yaml
 on-bus: i2c
 properties:
-  num_lines:
+  display_mode:
     type: int
     enum:
       - 1
       - 2
     default: 2
+    description: "number of display lines "
+
+  idl:
+    type: int 
+    enum:
+      - 4
+      - 8
+    default: 4
+    description: "interface data length can be 4 bit or 8 bit can take values 4 or 8"
     
+  format: 
+    type: string
+    enum:
+      - "5x8"
+      - "5x11"
+    default: "5x8"
+    description: "dot matrix  size per character"

@@ -20,47 +20,43 @@ p7->D7
 
 */
 
-#define LCD_CLEAR_DISPLAY    0x01
-#define LCD_RETURN_HOME      0x02
-#define LCD_ENTRY_MODE_SET   0x04
-#define LCD_DISPLAY_CONTROL  0x08
-#define LCD_CURSOR_SHIFT     0x10
-#define LCD_FUNCTION_SET     0x20
-#define LCD_SET_CGRAM_ADDR   0x40
-#define LCD_SET_DDRAM_ADDR   0x80
+#define AUXDISPLAY_CLEAR_DISPLAY    0x01
+#define AUXDISPLAY_RETURN_HOME      0x02
+#define AUXDISPLAY_ENTRY_MODE_SET   0x04
+#define AUXDISPLAY_DISPLAY_CONTROL  0x08
+#define AUXDISPLAY_CURSOR_SHIFT     0x10
+#define AUXDISPLAY_FUNCTION_SET     0x20
+#define AUXDISPLAY_SET_CGRAM_ADDR   0x40
+#define AUXDISPLAY_SET_DDRAM_ADDR   0x80
 
-#define LCD_FUNCTION_8BIT     0X30
-#define LCD_FUNCTION_4BIT   0X20
-#define LCD_FUNCTION_2LINE  0x08
-#define LCD_5X8_DOTS        
-#define LCD_5X11_DOTS   0x04
+#define AUXDISPLAY_FUNCTION_8BIT     0X30
+#define AUXDISPLAY_FUNCTION_4BIT   0X20
+#define AUXDISPLAY_FUNCTION_2LINE  0x08
+#define AUXDISPLAY_5X8_DOTS        
+#define AUXDISPLAY_5X11_DOTS   0x04
 
-/* I2C LCD Pin Mapping (PCF8574) */
-#define LCD_RS_PIN           0x01  /* P0 - Register Select */
-#define LCD_RW_PIN           0x02  /* P1 - Read/Write */
-#define LCD_EN_PIN           0x04  /* P2 - Enable */
-#define LCD_BACKLIGHT_PIN    0x08  /* P3 - Backlight */
+/* I2C AUXDISPLAY Pin Mapping (PCF8574) */
+#define AUXDISPLAY_RS_PIN           0x01  /* P0 - Register Select */
+#define AUXDISPLAY_RW_PIN           0x02  /* P1 - Read/Write */
+#define AUXDISPLAY_EN_PIN           0x04  /* P2 - Enable */
+#define AUXDISPLAY_BACKLIGHT_PIN    0x08  /* P3 - Backlight */
 
-#define LCD_ENTRYLEFT 0x02
+#define AUXDISPLAY_ENTRYLEFT 0x02
 
-#define LCD_DISPLAYON 0x04
-#define LCD_CURSOROFF 0x00
-#define LCD_BLINKOFF  0x00
-#define LCD_CURSORON 0x02
-#define LCD_BLINKON 0x01
-#define LCD_DISPLAYCONTROL 0x08
+#define AUXDISPLAY_DISPLAYON 0x04
+#define AUXDISPLAY_CURSOROFF 0x00
+#define AUXDISPLAY_BLINKOFF  0x00
+#define AUXDISPLAY_CURSORON 0x02
+#define AUXDISPLAY_BLINKON 0x01
+#define AUXDISPLAY_DISPLAYCONTROL 0x08
 
-#define LCD_SHIFT_DISPLAY_LEFT 0x18
+#define AUXDISPLAY_SHIFT_DISPLAY_LEFT 0x18
 enum shift_dir
 {
     left,
     right
 };
-enum state
-{
-    on,
-    off
-};
+
 __subsystem struct lcm1602_driver_api
 
 {
@@ -83,7 +79,11 @@ __subsystem struct lcm1602_driver_api
     /***
      * @brief turn backlight on or off 
      */
-    int  (*backlight)(const struct device *dev,enum state st);
+    int  (*auxiliary_display_on)(const struct device *dev);
+    /***
+     * @brief turn diplay off 
+     */
+    int (*auxiliary_display_off)(const struct device *dev);
     /***
      * @brief shifts entire display 
      * 
@@ -105,7 +105,7 @@ __subsystem struct lcm1602_driver_api
      * @retval 0 if successful
      * @retval -errno for failure
      */
-    int (*lcd_print)(const struct device *dev,char *character,int len);
+    int (*AUXDISPLAY_print)(const struct device *dev,char *character,int len);
 
     /***
      * @brief location to set cursor 
@@ -169,7 +169,7 @@ struct lcm1602_config{
 
 struct lcm1602_data
 {
-    uint8_t lcd_backlight_state;
+    uint8_t AUXDISPLAY_backlight_state;
 };
 
 #include<syscalls/lcm1602.h>

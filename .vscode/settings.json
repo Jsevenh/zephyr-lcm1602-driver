@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/mbayi/Documents/zephyr/liquidCrystal/liquidcrystal"
+    "cmake.sourceDirectory": "/home/mbayi/Documents/zephyr/liquidCrystal/liquidcrystal",
+    "terminal.integrated.stickyScroll.enabled": false
 }
