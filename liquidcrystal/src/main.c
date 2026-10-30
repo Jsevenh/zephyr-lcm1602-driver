@@ -17,29 +17,30 @@ int main(void)
 	}
 	
 	//  }
-	//auxdisplay_clear(lcm1602);
+	
+	auxdisplay_cursor_position_set(lcm1602,AUXDISPLAY_POSITION_ABSOLUTE,0,0);
 	auxdisplay_cursor_set_enabled(lcm1602,true);
 	auxdisplay_cursor_shift_set(lcm1602,1,false);
 	auxdisplay_position_blinking_set_enabled(lcm1602,false);
 	 char name[]="zephyr driver api ... drv";
 	auxdisplay_write(lcm1602,name,strlen(name));
 
-	 uint8_t deg[8] = {
+	uint8_t Character[8] = {
+  0b01111,
+  0b01001,
+  0b01111,
   0b00000,
-  0b01110,
-  0b01010,
-  0b01110,
   0b00000,
   0b00000,
   0b00000,
   0b00000
 };
-		struct auxdisplay_character ch=
+	struct auxdisplay_character ch =
 		{
-			.character_code=0,
-			.data=deg,
-			.index=2,
-		};
+			.character_code = 0,
+			.data = Character,
+			.index = 0,
+	};
 	auxdisplay_cursor_position_set(lcm1602,AUXDISPLAY_POSITION_ABSOLUTE,1,3);
 	auxdisplay_custom_character_set(lcm1602,&ch);
 
