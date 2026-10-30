@@ -17,31 +17,38 @@ int main(void)
 	}
 	
 	//  }
-	lcd_cursor(lcm1602,on);
-	lcd_cursor_blink(lcm1602,off);
+	//auxdisplay_clear(lcm1602);
+	auxdisplay_cursor_set_enabled(lcm1602,true);
+	auxdisplay_cursor_shift_set(lcm1602,1,false);
+	auxdisplay_position_blinking_set_enabled(lcm1602,false);
+	 char name[]="zephyr driver api ... drv";
+	auxdisplay_write(lcm1602,name,strlen(name));
+
+	 uint8_t deg[8] = {
+  0b00000,
+  0b01110,
+  0b01010,
+  0b01110,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
+		struct auxdisplay_character ch=
+		{
+			.character_code=0,
+			.data=deg,
+			.index=2,
+		};
+	auxdisplay_cursor_position_set(lcm1602,AUXDISPLAY_POSITION_ABSOLUTE,1,3);
+	auxdisplay_custom_character_set(lcm1602,&ch);
+
 	
-	 char name[]="zephyr driver api";
-	 for (int i=0;i<strlen(name);++i)
-	 {
-		lcd_print(lcm1602,name+i,1);
-		k_msleep(100);
-	 }
-	 
-
-	 char kite[8] =
-		 {
-			 0b00100,
-			 0b01010,
-			 0b10001,
-			 0b01010,
-			 0b00100,
-			 0b01000,
-			 0b00100,
-			 0b00000};
-
-	 lcd_create_custom_char(lcm1602,kite, 0);
-	 lcd_set_cursor(lcm1602,1, 1);
-	 lcd_print_custom(lcm1602,0);
+	// for(int i=0;i<10;++i)
+	//  {
+	// 	auxdisplay_display_position_set(lcm1602,AUXDISPLAY_POSITION_RELATIVE_DIRECTION,-1,0);
+	// 	k_msleep(2000);
+	//  }
 	
 	 return 0;
 }

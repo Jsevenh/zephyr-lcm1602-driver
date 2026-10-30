@@ -17,9 +17,9 @@
       "filterStdout": true,
       "serverStarted": "halted due to debug-request, current mode: Thread",
       "MIMode": "gdb",
-      "miDebuggerPath": "${config:zephyr-workbench.sdk}/arm-zephyr-eabi/bin/arm-zephyr-eabi-gdb",
+      "miDebuggerPath": "${config:zephyr-workbench.sdk}/gnu/arm-zephyr-eabi/bin/arm-zephyr-eabi-gdb-py",
       "debugServerPath": "${workspaceFolder}/build/primary/.debug/west_wrapper.sh",
-      "debugServerArgs": "debugserver --build-dir \"${workspaceFolder}/build/primary\" --runner openocd --gdb-port 3333 --config openocd.cfg --config ${workspaceFolder}/build/.debug/gdb.cfg ",
+      "debugServerArgs": "debugserver --build-dir \"${workspaceFolder}/build/primary\" --runner openocd --gdb-port 3333 --config openocd.cfg --config ${workspaceFolder}/build/.debug/gdb.cfg",
       "setupCommands": [
         {
           "text": "-environment-cd ${workspaceFolder}/build/primary/zephyr"

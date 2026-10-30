@@ -1,18 +1,19 @@
 {
-    "zephyr-workbench.westWorkspace": "/home/mbayi/zephyrproject",
-    "zephyr-workbench.board": "nucleo_f446re",
-    "zephyr-workbench.toolchain": "zephyr_sdk",
-    "zephyr-workbench.sdk": "/home/mbayi/zephyr-sdk-0.17.4",
-    "zephyr-workbench.build.pristine": "auto",
-    "zephyr-workbench.build.configurations": [
-        {
-            "name": "primary",
-            "board": "nucleo_f446re",
-            "active": "true"
-        }
-    ],
-    "cmake.configureOnOpen": false,
-    "cmake.enableAutomaticKitScan": false,
-    "C_Cpp.default.compilerPath": "/home/mbayi/zephyr-sdk-0.17.4/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc",
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/primary/compile_commands.json"
+  "zephyr-workbench.westWorkspace": "${workspaceFolder}/../../../zephyrproject",
+  "zephyr-workbench.board": "nucleo_f446re",
+  "zephyr-workbench.toolchain": "zephyr",
+  "zephyr-workbench.sdk": "${workspaceFolder}/../../../zephyr-sdk-1.0.1",
+  "zephyr-workbench.build.pristine": "auto",
+  "zephyr-workbench.build.configurations": [
+    {
+      "name": "primary",
+      "board": "nucleo_f446re",
+      "active": "true"
+    }
+  ],
+  "cmake.configureOnOpen": false,
+  "cmake.enableAutomaticKitScan": false,
+  "C_Cpp.default.compilerPath": "/home/mbayi/zephyr-sdk-0.17.4/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/primary/compile_commands.json",
+  "zephyr-workbench.intellisense.provider": "cpptools"
 }
