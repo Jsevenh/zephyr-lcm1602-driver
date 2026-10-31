@@ -70,7 +70,11 @@ p7->D7
 #define AUXDISPLAY_EN_PIN               0x04  /* P2 - Enable */
 #define AUXDISPLAY_BACKLIGHT_PIN        0x08  /* P3 - Backlight */
 
-
+#define AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR 0X4F
+#define AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR 0X27
+#define AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR 0X67
+#define AUXDISPLAY_LINE_1_START_ADDR 0x0
+#define AUXDISPLAY_LINE_2_START_ADDR 0x40
 
 
 enum shift_dir
@@ -92,10 +96,14 @@ struct lcm1602_config{
 
 };
 
-
+enum ddram_addr_dir
+{
+    increase=0,decrease
+};
 struct lcm1602_data
 {
     uint8_t backlight;
+    // holds cursor psosition data 
     uint8_t x,y ;
     // registers 
     /** 
@@ -119,10 +127,19 @@ struct lcm1602_data
     *       2.  line numbers 
     *       3.  5x8 or 5x11 dots 
     */
-   uint8_t  function_set ;
+   uint8_t  function_set ; 
+    enum auxdisplay_direction dir ;
+    // count the number of times the display has been shifted
+    // 0 for non , a negative number for left and a positive number for right
+    int8_t display_shift_count;
 };
 
+int lcm1602_cursor_shift_set(const struct device *dev, uint8_t direction, bool display_shift);
+int lcm1602_write(const struct device *dev,
+                  const uint8_t *data,
+                  uint16_t len);
 
-int lcm1602_cursor_shift_set (const struct device *dev, uint8_t direction, bool display_shift);
+uint8_t compute_ddram_addr(const struct device *dev, uint8_t x, uint8_t y);
+int lcm1602_cursor_position_set (const struct device *dev, enum auxdisplay_position type, int16_t x, int16_t y);
 
 #endif  /* AUXDISPLAY_LM1602_H */

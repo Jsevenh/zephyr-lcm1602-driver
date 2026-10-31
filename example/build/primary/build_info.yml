@@ -1,0 +1,66 @@
+cmake:
+  application:
+    configuration-dir: '/home/mbayi/Documents/liquidCrystal/example'
+    source-dir: '/home/mbayi/Documents/liquidCrystal/example'
+  board:
+    name: 'nucleo_f446re'
+    path:
+     - '/home/mbayi/zephyrproject/zephyr/boards/st/nucleo_f446re'
+    qualifiers: 'stm32f446xx'
+    revision: ''
+  devicetree:
+    bindings-dirs:
+     - '/home/mbayi/Documents/liquidCrystal/modules/dts/bindings'
+     - '/home/mbayi/zephyrproject/zephyr/dts/bindings'
+    files:
+     - '/home/mbayi/zephyrproject/zephyr/boards/st/nucleo_f446re/nucleo_f446re.dts'
+     - '/home/mbayi/Documents/liquidCrystal/example/boards/nucleo_f446re.overlay'
+    include-dirs:
+     - '/home/mbayi/zephyrproject/modules/hal/ambiq/dts'
+     - '/home/mbayi/zephyrproject/modules/hal/atmel/include'
+     - '/home/mbayi/zephyrproject/modules/hal/bouffalolab/include'
+     - '/home/mbayi/zephyrproject/modules/hal/bouffalolab/include/zephyr'
+     - '/home/mbayi/zephyrproject/modules/hal/gigadevice/include'
+     - '/home/mbayi/zephyrproject/modules/hal/infineon/dts'
+     - '/home/mbayi/zephyrproject/modules/hal/microchip/include'
+     - '/home/mbayi/zephyrproject/modules/hal/microchip/dts'
+     - '/home/mbayi/zephyrproject/modules/hal/nuvoton/dts'
+     - '/home/mbayi/zephyrproject/modules/hal/nxp/dts'
+     - '/home/mbayi/zephyrproject/modules/hal/stm32/dts'
+     - '/home/mbayi/zephyrproject/modules/hal/ti/dts'
+     - '/home/mbayi/Documents/liquidCrystal/modules/include'
+     - '/home/mbayi/Documents/liquidCrystal/modules/dts'
+     - '/home/mbayi/zephyrproject/zephyr/include'
+     - '/home/mbayi/zephyrproject/zephyr/include/zephyr'
+     - '/home/mbayi/zephyrproject/zephyr/dts/common'
+     - '/home/mbayi/zephyrproject/zephyr/dts/vendor'
+     - '/home/mbayi/zephyrproject/zephyr/dts/tricore'
+     - '/home/mbayi/zephyrproject/zephyr/dts/rx'
+     - '/home/mbayi/zephyrproject/zephyr/dts/x86'
+     - '/home/mbayi/zephyrproject/zephyr/dts/xtensa'
+     - '/home/mbayi/zephyrproject/zephyr/dts/sparc'
+     - '/home/mbayi/zephyrproject/zephyr/dts/riscv'
+     - '/home/mbayi/zephyrproject/zephyr/dts/posix'
+     - '/home/mbayi/zephyrproject/zephyr/dts/arm64'
+     - '/home/mbayi/zephyrproject/zephyr/dts/arm'
+     - '/home/mbayi/zephyrproject/zephyr/dts/arc'
+     - '/home/mbayi/zephyrproject/zephyr/dts'
+    user-files:
+     - '/home/mbayi/Documents/liquidCrystal/example/boards/nucleo_f446re.overlay'
+  kconfig:
+    files:
+     - '/home/mbayi/zephyrproject/zephyr/boards/st/nucleo_f446re/nucleo_f446re_defconfig'
+     - '/home/mbayi/Documents/liquidCrystal/example/prj.conf'
+    user-files:
+     - '/home/mbayi/Documents/liquidCrystal/example/prj.conf'
+  toolchain:
+    name: 'zephyr'
+    path: '/home/mbayi/zephyr-sdk-1.0.1'
+  zephyr:
+    version: '4.5.99'
+    zephyr-base: '/home/mbayi/zephyrproject/zephyr'
+version: '0.1.0'
+west:
+  command: '/home/mbayi/zephyrproject/.venv/bin/west build --pristine never --board nucleo_f446re --build-dir /home/mbayi/Documents/liquidCrystal/example/build/primary --source-dir /home/mbayi/Documents/liquidCrystal/example'
+  topdir: '/home/mbayi/zephyrproject'
+  version: '1.5.0'

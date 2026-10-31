@@ -89,25 +89,70 @@ int auxdisplay_write_4bit(const struct device *dev, uint8_t d, bool is_instructi
     return 0;
 }
 
+int update_ddram_addr(const struct device *dev, uint8_t offset)
+{
+    const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    struct lcm1602_data *const drv_data = (struct lcm1602_data *const)dev->data;
+    
+    // Compute new position in one line based on direction
+    int16_t new_x = drv_data->x + (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT? offset : -offset);
+
+    if (cfg->display_mode == 1) {
+        if (new_x > AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ) new_x = AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ;
+        if (new_x < 0)     new_x = 0;
+    } else {
+        if (drv_data->y == 0) {
+            if (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT&& new_x > AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR) {
+                //  store difference between  max address on line 1 and new_x 
+                // position data is not stored as addresses but as x,y positions
+                // e.g x=0,y=1 represents address 0x40
+                new_x -= AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR;
+                new_x-=1;
+                // update y to  next line 
+                drv_data->y = 1;
+            } else if (new_x < 0) {
+                new_x = 0;
+            }
+        } else {
+            if (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT&& new_x > AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR) {
+                new_x = AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR;
+            } else if (drv_data->dir!=AUXDISPLAY_DIRECTION_RIGHT && new_x < AUXDISPLAY_LINE_2_START_ADDR) {
+                new_x = AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR;
+                drv_data->y = 0;
+            }
+        }
+    }
+
+    drv_data->x = (uint8_t)new_x;
+    return 0;
+}
 int lcm1602_write ( 	const struct device * 	dev,
 		const uint8_t * 	data,
 		uint16_t 	len )
         {
              int r;
             const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+            struct lcm1602_data *const drv_data = (struct lcm1602_data *const)dev->data;
             if(cfg->idl==4)
             {
                 for(int i=0; i<len; ++i)
                 {
                     r=auxdisplay_write_4bit(dev, *(data+i),false);
-                }
+                    if(r<0)
+                    {
+                        return -EINVAL;
+                    }
 
+                }
+            // 
+          
             }
             else
             {
                 //  ignore 8 bit mode for now
                 return -ENOSYS;
             }
+            r=update_ddram_addr(dev,len);
             return r;
         }
 /***
@@ -238,9 +283,16 @@ int lcm1602_init(const struct device *dev)
         return r;
     }
     lcm1602_cursor_shift_set(dev,1,false);
+    // set the auxiliaty display cursor position to  row 0 , column 0
+    // this will help with tracking the cursor position
+    lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,0,0);
     return 0;
 }
+int lcm1602_clear 	( 	const struct device * 	dev	) 	
+{
+    return auxdisplay_write_4bit(dev, AUXDISPLAY_CLEAR_DISPLAY, true);
 
+}
 int lcm1602_display_on(const struct device *dev)
 {
     int r = 0;
@@ -333,11 +385,15 @@ int lcm1602_cursor_shift_set (const struct device *dev, uint8_t direction, bool 
     {
         data->entry_mode &=~AUXDISPLAY_INCREMENT_DDRAM_ADDR_RW;
         data->entry_mode |=AUXDISPLAY_ENTRY_MODE_SET;
+        // set ddram address dir to decreasing ;
+        data->dir=AUXDISPLAY_DIRECTION_LEFT;
     }
     // shift right
     else if (direction==1)
     {
         data->entry_mode |=AUXDISPLAY_INCREMENT_DDRAM_ADDR_RW;
+        // set ddram address to increasing
+        data->dir=AUXDISPLAY_DIRECTION_RIGHT;
     }
     else{
         return -ENOSYS;
@@ -368,29 +424,29 @@ uint8_t compute_ddram_addr(const struct device *dev,uint8_t x,uint8_t y)
     if (cfg->display_mode == 2)
     {
         // ensure the x  and y  are within range
-        if(x==0)
+        if(y==0)
         {
-            addr=y;
-            if(addr>0x27)
+            addr=x;
+            if(addr>AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR)
             {
-                addr=0x27;
+                addr=AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR;
             }
         }
         else
         {
-            addr=0x40 +y;
-            if(addr>0x67)
+            addr=AUXDISPLAY_LINE_2_START_ADDR +x;
+            if(addr>AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR)
             {
-                addr=0x67;
+                addr=AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR;
             }
         }
     }
     else
     {
-        addr+=y;
-            if(addr>0x4f)
+        addr=x;
+            if(addr>AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR )
             {
-                addr=0x4f;
+                addr=AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ;
             }
     }
     return addr;
@@ -412,13 +468,13 @@ int lcm1602_cursor_position_set (const struct device *dev, enum auxdisplay_posit
     case AUXDISPLAY_POSITION_ABSOLUTE :
         addr=compute_ddram_addr(dev,x,y);
         
-        data->x=x;
-        data->y=y;
+        data->x=(uint8_t)x;
+        data->y=(uint8_t)y;
         break;
     case AUXDISPLAY_POSITION_RELATIVE:
          addr=compute_ddram_addr(dev,data->x+x,data->y+y);
-         data->x +=x;
-         data->y+=y;
+         data->x +=(uint8_t)x;
+         data->y+=(uint8_t)y;
          break;
     // case AUXDISPLAY_POSITION_RELATIVE_DIRECTION :
     // break;
@@ -430,12 +486,26 @@ int lcm1602_cursor_position_set (const struct device *dev, enum auxdisplay_posit
     
     return r;
 }
+
+int lcm1602_cursor_position_get 	( 	const struct device * 	dev,
+		int16_t * 	x,
+		int16_t * 	y )
+
+        {
+            struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
+            *x=(int16_t)data->x;
+            *y=(int16_t)data->y;
+            return 0;
+        }
 int lcm1602_custom_character_set( 	const struct device * 	dev,
 		struct auxdisplay_character * 	character ) 
 {
     
     int r = 0;
-    
+    //Each custom character slot in the LCD's CGRAM requires 8 bytes of memory (one byte per row). 
+   //if  character index is 1, this sets the address to 0x41 instead of 0x48 (0x40 + (1 * 8)).
+    //This unaligned write spills pixel data across adjacent character slots,
+    //corrupting the memory layout hence need to multiply by 8 or <<3
     r = auxdisplay_write_4bit(dev, AUXDISPLAY_SET_CGRAM_ADDR | (character->index*8), true);
     struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
     if (r < 0)
@@ -443,9 +513,9 @@ int lcm1602_custom_character_set( 	const struct device * 	dev,
         return r;
     }
     
-    // assuming address is automatically increased
-    // for now assume a 5x8 mode will be updated 
-    /// Todo  add support for 5x8 and 5x10 mode 
+   // ddram address has to be set to increase after write 
+    // for now  5x8 mode only is supported
+    /// Todo  add support for 5x8 and 5x11 mode 
     for (uint8_t i = 0; i < 8; ++i)
     {
         r = auxdisplay_write_4bit(dev,*(character->data + i), false);
@@ -454,9 +524,12 @@ int lcm1602_custom_character_set( 	const struct device * 	dev,
             return r;
         }
     }
-    lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,data->x, data->y);
-    return auxdisplay_write_4bit(dev,character->index,false);
+    r=lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,data->x, data->y);
+    r=auxdisplay_write_4bit(dev,character->index,false);
+    r=lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,data->x+1, data->y);
+    return r;
 }
+
 int lcm1602_display_position_set 	( 	const struct device * 	dev,
 		enum auxdisplay_position 	type,
 		int16_t 	x,
@@ -495,7 +568,8 @@ static DEVICE_API(auxdisplay, lcm1602_api) = {
     .custom_character_set=lcm1602_custom_character_set,
     .write=lcm1602_write,
     .display_position_set=lcm1602_display_position_set,
-
+    .cursor_position_get=lcm1602_cursor_position_get,
+    .clear=lcm1602_clear,
 
 
 };
