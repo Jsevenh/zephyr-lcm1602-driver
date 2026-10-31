@@ -123,6 +123,6 @@ struct lcm1602_data
 };
 
 
-
+int lcm1602_cursor_shift_set (const struct device *dev, uint8_t direction, bool display_shift);
 
 #endif  /* AUXDISPLAY_LM1602_H */

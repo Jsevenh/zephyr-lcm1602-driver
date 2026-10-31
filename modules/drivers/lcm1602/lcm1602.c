@@ -237,6 +237,7 @@ int lcm1602_init(const struct device *dev)
     {
         return r;
     }
+    lcm1602_cursor_shift_set(dev,1,false);
     return 0;
 }
 
@@ -426,6 +427,7 @@ int lcm1602_cursor_position_set (const struct device *dev, enum auxdisplay_posit
         break;
     }
     int r = auxdisplay_write_4bit(dev, AUXDISPLAY_SET_DDRAM_ADDR| addr , true);
+    
     return r;
 }
 int lcm1602_custom_character_set( 	const struct device * 	dev,
@@ -434,13 +436,13 @@ int lcm1602_custom_character_set( 	const struct device * 	dev,
     
     int r = 0;
     
-    r = auxdisplay_write_4bit(dev, AUXDISPLAY_SET_CGRAM_ADDR | character->index, true);
+    r = auxdisplay_write_4bit(dev, AUXDISPLAY_SET_CGRAM_ADDR | (character->index*8), true);
     struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
     if (r < 0)
     {
         return r;
     }
-    lcm1602_cursor_shift_set(dev,0,false);
+    
     // assuming address is automatically increased
     // for now assume a 5x8 mode will be updated 
     /// Todo  add support for 5x8 and 5x10 mode 

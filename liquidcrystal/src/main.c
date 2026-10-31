@@ -18,9 +18,8 @@ int main(void)
 	
 	//  }
 	
-	auxdisplay_cursor_position_set(lcm1602,AUXDISPLAY_POSITION_ABSOLUTE,0,0);
+	
 	auxdisplay_cursor_set_enabled(lcm1602,true);
-	auxdisplay_cursor_shift_set(lcm1602,1,false);
 	auxdisplay_position_blinking_set_enabled(lcm1602,false);
 	 char name[]="zephyr driver api ... drv";
 	auxdisplay_write(lcm1602,name,strlen(name));
