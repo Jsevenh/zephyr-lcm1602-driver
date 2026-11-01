@@ -309,7 +309,7 @@ int lcm1602_display_on(const struct device *dev)
         // update the entry mode variable
          data->display_control |=AUXDISPLAY_ON;
 
-        r = auxdisplay_write_4bit(dev,data->entry_mode,true);
+        r = auxdisplay_write_4bit(dev,data->display_control,true);
 
     return r;
 }
@@ -327,9 +327,9 @@ int lcm1602_display_off(const struct device *dev)
         // this clears the  display control bit 
         data->display_control &=~AUXDISPLAY_ON;
         // set  display control bit 
-        data->entry_mode |=AUXDISPLAY_DISPLAY_CONTROL;
+        data->display_control |=AUXDISPLAY_DISPLAY_CONTROL;
 
-        r = auxdisplay_write_4bit(dev,data->entry_mode,true);
+        r = auxdisplay_write_4bit(dev,data->display_control,true);
      
     return r;
 }
