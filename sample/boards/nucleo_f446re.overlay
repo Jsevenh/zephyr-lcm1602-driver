@@ -11,7 +11,7 @@
         compatible="lcm1602";
         reg=<0x27>;
         label="lcd_display";
-        num_lines=<2>;
+        display_mode=<2>;
         status="okay";
 
     };

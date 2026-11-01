@@ -4,9 +4,12 @@
 #include <errno.h>
 #include <zephyr/drivers/i2c.h>
 
-#include "lcm1602.h"
+#include <lcm1602.h>
 
-int lcd_write_4bit(const struct device *dev, uint8_t d, bool is_instruction);
+
+int auxdisplay_write_4bit(const struct device *dev, uint8_t d, bool is_instruction);
+
+
 /***
  *
  * @brief function the does actual writing of the data to the lcm1602 based on the write
@@ -14,15 +17,16 @@ int lcd_write_4bit(const struct device *dev, uint8_t d, bool is_instruction);
  *
  * @param *dev pointer to the device instance
  *
- * @param nibble to send
+ * @param val nibble to send
  *
  * @retval  returns 0 for success or an error code
  */
-int pcf8574_write(const struct device *dev, uint8_t val)
+int controller_write(const struct device *dev, uint8_t val)
 {
+    // buffer and return value from an i2c write 
     uint8_t buf = 0, r = 0;
     // RW pin has to stay low during write operations
-    buf = val & ~LCD_EN_PIN & ~LCD_RW_PIN;
+    buf = val & ~AUXDISPLAY_EN_PIN & ~AUXDISPLAY_RW_PIN;
     const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
     r = i2c_write_dt(&cfg->i2c, &buf, 1);
     if (r < 0)
@@ -31,7 +35,7 @@ int pcf8574_write(const struct device *dev, uint8_t val)
     }
     k_usleep(1); // tsu1 (R/W setup time) > 100ns
     // 1. Send data with EN HIGH
-    buf = val | LCD_EN_PIN;
+    buf = val | AUXDISPLAY_EN_PIN;
     r = i2c_write_dt(&cfg->i2c, &buf, 1);
     if (r < 0)
     {
@@ -39,8 +43,8 @@ int pcf8574_write(const struct device *dev, uint8_t val)
     }
     k_usleep(1); // Enable pulse width > 450ns
 
-    // 2. Send data with EN LOW (Falling edge triggers the LCD)
-    buf = val & ~LCD_EN_PIN;
+    // 2. Send data with EN LOW (Falling edge triggers the AUXDISPLAY)
+    buf = val & ~AUXDISPLAY_EN_PIN;
     r = i2c_write_dt(&cfg->i2c, &buf, 1);
     if (r < 0)
     {
@@ -53,7 +57,7 @@ int pcf8574_write(const struct device *dev, uint8_t val)
 
 /***
  * @brief write  2 nibbles to the lcm1602 by splitting the 8bit data into nibbles and
- * calling pcf8574_write
+ * calling controller_write
  *
  * @param *dev pointer to device instance
  *
@@ -61,23 +65,23 @@ int pcf8574_write(const struct device *dev, uint8_t val)
  *
  * @retval int returns 0 for success or an error code for failure
  */
-int lcd_write_4bit(const struct device *dev, uint8_t d, bool is_instruction)
+int auxdisplay_write_4bit(const struct device *dev, uint8_t d, bool is_instruction)
 {
-    uint8_t rs_mask = is_instruction ? 0 : LCD_RS_PIN;
+    uint8_t rs_mask = is_instruction ? 0 : AUXDISPLAY_RS_PIN;
     struct lcm1602_data *data = (struct lcm1602_data *)dev->data;
-    uint8_t backlight = data->lcd_backlight_state; // Usually 0x08
+    uint8_t backlight = data->backlight; // Usually 0x08
 
     uint8_t high_nibble = (d & 0xF0);
     uint8_t low_nibble = ((d << 4) & 0xF0);
     int ret = 0;
     // Write High Nibble
-    ret = pcf8574_write(dev, high_nibble | rs_mask | backlight);
+    ret = controller_write(dev, high_nibble | rs_mask | backlight);
     if (ret < 0)
     {
         return ret;
     }
     // Write Low Nibble
-    ret = pcf8574_write(dev, low_nibble | rs_mask | backlight);
+    ret = controller_write(dev, low_nibble | rs_mask | backlight);
     if (ret < 0)
     {
         return ret;
@@ -85,6 +89,79 @@ int lcd_write_4bit(const struct device *dev, uint8_t d, bool is_instruction)
     return 0;
 }
 
+int update_ddram_addr(const struct device *dev, uint8_t offset)
+{
+    const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    struct lcm1602_data *const drv_data = (struct lcm1602_data *const)dev->data;
+    
+    // Compute new position in one line based on direction
+    int16_t new_x = drv_data->x + (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT? offset : -offset);
+
+    if (cfg->display_mode == 1) 
+    {
+        new_x=fmax(0,fmod(new_x,AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ));
+    } else 
+    {
+        if (drv_data->y == 0) 
+        {
+            if (new_x > AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR)
+            {
+                // position data is not stored as addresses but as x,y positions
+            // e.g x=0,y=1 represents address 0x40
+            new_x=fmax(0,fmod(new_x,AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR))-1;
+                // update y to  next line 
+               drv_data->y = 1;
+            } 
+              
+        } 
+        else {
+            if (new_x < AUXDISPLAY_LINE_2_START_ADDR) {
+                drv_data->y=0;
+            } 
+            else if(new_x>AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR)
+            {
+                 new_x=fmod(new_x,AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR)-1;
+                 drv_data->y=0;
+            }
+            else{
+                new_x=fmod(new_x,AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR);
+            }
+            
+        }
+    }
+
+    drv_data->x = (uint8_t)new_x;
+    return 0;
+}
+int lcm1602_write ( 	const struct device * 	dev,
+		const uint8_t * 	data,
+		uint16_t 	len )
+        {
+             int r;
+            const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+            struct lcm1602_data *const drv_data = (struct lcm1602_data *const)dev->data;
+            if(cfg->idl==4)
+            {
+                for(int i=0; i<len; ++i)
+                {
+                    r=auxdisplay_write_4bit(dev, *(data+i),false);
+                    if(r<0)
+                    {
+                        return -EINVAL;
+                    }
+
+                }
+            // 
+          
+            }
+            else
+            {
+                //  ignore 8 bit mode for now
+                return -ENOSYS;
+            }
+            r=update_ddram_addr(dev,len);
+            return r;
+        }
 /***
  * @brief initialize the lcm1602 and set it up for 4 bit mode
  *
@@ -96,10 +173,10 @@ int lcm1602_init(const struct device *dev)
 {
 
     /*
-    Even with perfect timing in lcd_write_4bit, the LCD will not respond if it hasn't been put into 4-bit mode correctly first.
-     When the LCD powers on, it starts in 8-bit mode.
+    Even with perfect timing in auxdisplay_write_4bit, the AUXDISPLAY will not respond if it hasn't been put into 4-bit mode correctly first.
+     When the AUXDISPLAY powers on, it starts in 8-bit mode.
 
-    To get into 4-bit mode, you cannot just call lcd_write_4bit.
+    To get into 4-bit mode, you cannot just call auxdisplay_write_4bit.
     You must send the "Function Set" command (0x03) as a single nibble three times to "wake it up" before you can start sending dual-nibble commands.
 
     pseudo-code
@@ -118,20 +195,29 @@ int lcm1602_init(const struct device *dev)
 
     Send 0x20 (high nibble only), pulse EN. <— This officially switches it to 4-bit mode.
 
-    Now you can use your lcd_write_4bit function for everything else.
+    Now you can use your auxdisplay_write_4bit function for everything else.
     */
-    /* Wait for LCD power-up (>40ms) */
+    /* Wait for AUXDISPLAY power-up (>40ms) */
     k_msleep(50);
-
+    const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
+    //  reset all data variables 
+    data->function_set=0;
+    data->display_control=0;
+    data->entry_mode=0;
+   data->x=0;
+   data->y=0;
+    
     // Initial state: RS=0, RW=0, EN=0, Backlight=On
-    uint8_t startup_flags = LCD_BACKLIGHT_PIN;
-    struct lcm1602_data *data = (struct lcm1602_data *)dev->data;
-    data->lcd_backlight_state = LCD_BACKLIGHT_PIN;
-    // 2. First special "Wake up" attempt (Instruction 0x30)
+    uint8_t startup_flags = AUXDISPLAY_BACKLIGHT_PIN;
+    data->backlight = AUXDISPLAY_BACKLIGHT_PIN;
+
+    if(cfg->idl==4){
+        // 2. First special "Wake up" attempt (Instruction 0x30)
     // We send this as a high nibble only.
-    // set lcd to 8 bit mode by sending insruction 0x30
+    // set AUXDISPLAY to 8 bit mode by sending insruction 0x30
     int r = 0;
-    r = pcf8574_write(dev, LCD_FUNCTION_8BIT | startup_flags);
+    r = controller_write(dev, AUXDISPLAY_FUNCTION_8BIT | startup_flags);
     if (r < 0)
     {
         return r;
@@ -139,7 +225,7 @@ int lcm1602_init(const struct device *dev)
     k_msleep(5); // Must wait > 4.1ms
 
     // 3. Second special "Wake up" attempt
-    r = pcf8574_write(dev, LCD_FUNCTION_8BIT | startup_flags);
+    r = controller_write(dev, AUXDISPLAY_FUNCTION_8BIT | startup_flags);
     if (r < 0)
     {
         return r;
@@ -147,7 +233,7 @@ int lcm1602_init(const struct device *dev)
     k_usleep(150); // Must wait > 100us
 
     // 4. Third special "Wake up" attempt
-    r = pcf8574_write(dev, LCD_FUNCTION_8BIT | startup_flags);
+    r = controller_write(dev, AUXDISPLAY_FUNCTION_8BIT | startup_flags);
     if (r < 0)
     {
         return r;
@@ -155,42 +241,41 @@ int lcm1602_init(const struct device *dev)
     k_msleep(1);
 
     // 5. Set to 4-bit mode (Instruction 0x20)
-    // After this command, the LCD is officially in 4-bit mode
-    r = pcf8574_write(dev, LCD_FUNCTION_4BIT | startup_flags);
+    // After this command, the AUXDISPLAY is officially in 4-bit mode
+    r = controller_write(dev, AUXDISPLAY_FUNCTION_4BIT | startup_flags);
     if (r < 0)
     {
         return r;
     }
     k_msleep(1);
-
-    // Function Set: 2 lines, 5x8 font (0x20)
-    const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
-    if (cfg->num_lines == 2)
-    {
-        r = lcd_write_4bit(dev, LCD_FUNCTION_SET | LCD_FUNCTION_4BIT | LCD_FUNCTION_2LINE, true);
-        if (r < 0)
-        {
-            return r;
-        }
     }
     else
     {
-        r = lcd_write_4bit(dev, LCD_FUNCTION_SET | LCD_FUNCTION_4BIT | LCD_FUNCTION_1LINE, true);
+        // ignore 8 bit mode for now
+        return -ENOSYS;
+    }
+    
+
+    // Function Set: 2 lines, 5x8 font (0x20)
+    uint8_t bit_mask=0;
+    bit_mask|=cfg->idl==4?AUXDISPLAY_FUNCTION_4BIT :AUXDISPLAY_FUNCTION_8BIT;
+    bit_mask |= strcmp((const char*)cfg->dots,"5x8")==0? AUXDISPLAY_FUNCTION_5X8 :AUXDISPLAY_FUNCTION_5X11;
+    bit_mask |= cfg->display_mode==2 ? AUXDISPLAY_FUNCTION_2LINE :AUXDISPLAY_FUNCTION_1LINE;
+     int r = auxdisplay_write_4bit(dev,bit_mask, true);
         if (r < 0)
         {
             return r;
         }
-    }
-
-    // Display Control: Display ON, Cursor OFF, Blink OFF (0x0C)
-    r = lcd_write_4bit(dev, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF, true);
+    
+    // Display Control: Display ON
+    data->display_control|=AUXDISPLAY_ON;
+    r = auxdisplay_write_4bit(dev, data->display_control  , true);
     if (r < 0)
     {
         return r;
     }
-
     // Clear Display (0x01)
-    r = lcd_write_4bit(dev, LCD_CLEAR_DISPLAY, true);
+    r = auxdisplay_write_4bit(dev, AUXDISPLAY_CLEAR_DISPLAY, true);
     if (r < 0)
     {
         return r;
@@ -198,330 +283,310 @@ int lcm1602_init(const struct device *dev)
     k_msleep(2); // Clear command needs ~1.6ms to execute
 
     // Entry Mode: Increment cursor, no shift (0x06)
-    r = lcd_write_4bit(dev, LCD_ENTRY_MODE_SET | LCD_ENTRYRIGHT, true);
+    data->entry_mode|=AUXDISPLAY_DECREMENT_DDRAM_ADDR_RW;
+    r = auxdisplay_write_4bit(dev, data->entry_mode, true);
     if (r < 0)
     {
         return r;
     }
+    lcm1602_cursor_shift_set(dev,1,false);
+    // set the auxiliaty display cursor position to  row 0 , column 0
+    // this will help with tracking the cursor position
+    lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,0,0);
     return 0;
 }
+int lcm1602_clear 	( 	const struct device * 	dev	) 	
+{
+    return auxdisplay_write_4bit(dev, AUXDISPLAY_CLEAR_DISPLAY, true);
 
-/***
- * @brief toggle the  blink state of the cursor
- *
- *
+}
+int lcm1602_display_on(const struct device *dev)
+{
+    int r = 0;
+    struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
+    //const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    
+        // update the entry mode variable
+         data->display_control |=AUXDISPLAY_ON;
+
+        r = auxdisplay_write_4bit(dev,data->entry_mode,true);
+
+    return r;
+}
+/**
+ * @brief turn display bakclight off
  */
-int lcd_cursor_blink(const struct device *dev, enum state state)
+int lcm1602_display_off(const struct device *dev)
+{
+    int r = 0;
+    struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
+    //const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    
+   
+        // change state to off  rest  display on bit 
+        // this clears the  display control bit 
+        data->display_control &=~AUXDISPLAY_ON;
+        // set  display control bit 
+        data->entry_mode |=AUXDISPLAY_DISPLAY_CONTROL;
+
+        r = auxdisplay_write_4bit(dev,data->entry_mode,true);
+     
+    return r;
+}
+
+
+int	lcm1602_cursor_set_enabled (const struct device *dev, bool enabled)
+
+{
+    int r = 0;
+    struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
+    //const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    if(enabled)
+    {
+         data->display_control |= AUXDISPLAY_CURSOR_ON;
+
+    }
+    else 
+    {
+        //clear the cursor on bit , this clears the display control bit 
+       data->display_control &= ~AUXDISPLAY_CURSOR_ON;
+       // set the display control bit 
+       data->display_control |=AUXDISPLAY_DISPLAY_CONTROL;
+
+    }
+     r = auxdisplay_write_4bit(dev,data->display_control,true);
+   
+    return r;
+
+}
+
+// -----------------------------------------------------
+
+int	lcm1602_position_blinking_set_enabled (const struct device *dev, bool enabled)
 {
     int err = 0;
-    switch (state)
+   struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
+    //const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    if(enabled)
     {
-    case on:
-        err = lcd_write_4bit(dev, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKON, true);
-        break;
-    case off:
-        err = lcd_write_4bit(dev, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKOFF, true);
-        break;
-    default:
-        break;
+        data->display_control |=AUXDISPLAY_CURSOR_BLINK_ON;
     }
-
+    else{
+        data->display_control&=~AUXDISPLAY_CURSOR_BLINK_OFF;
+        data->display_control |=AUXDISPLAY_DISPLAY_CONTROL;
+    }
+    err = auxdisplay_write_4bit(dev,data->display_control,true);
     return err;
 }
 
 //----------------------------------------------------
-// shift display
 
-int lcd_cursor_shift(const struct device *dev, enum shift_dir dir)
+
+int lcm1602_cursor_shift_set (const struct device *dev, uint8_t direction, bool display_shift)
 {
-    int err = 0;
-    switch (dir)
+        int err = 0;
+   struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
+    //const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
+    // direction to left 
+    if(direction==0)
     {
-    case left:
-        err = lcd_write_4bit(dev, LCD_SHIFT_CURSOR_LEFT, true);
-        break;
-    case right:
-        err = lcd_write_4bit(dev, LCD_SHIFT_CURSOR_RIGHT, true);
-        break;
-    default:
-        break;
+        data->entry_mode &=~AUXDISPLAY_INCREMENT_DDRAM_ADDR_RW;
+        data->entry_mode |=AUXDISPLAY_ENTRY_MODE_SET;
+        // set ddram address dir to decreasing ;
+        data->dir=AUXDISPLAY_DIRECTION_LEFT;
     }
+    // shift right
+    else if (direction==1)
+    {
+        data->entry_mode |=AUXDISPLAY_INCREMENT_DDRAM_ADDR_RW;
+        // set ddram address to increasing
+        data->dir=AUXDISPLAY_DIRECTION_RIGHT;
+    }
+    else{
+        return -ENOSYS;
+    }
+    // display shift 
+    if(display_shift==true)
+    {
+        data->entry_mode|=AUXDISPLAY_SHIFT_DISPLAY_RW ;
+    }
+    else{
+        data->entry_mode&=~AUXDISPLAY_SHIFT_DISPLAY_RW ;
+        data->entry_mode |=AUXDISPLAY_ENTRY_MODE_SET;
+    }
+    
+     err = auxdisplay_write_4bit(dev,data->entry_mode,true);
     return err;
-}
-int lcd_display_shift(const struct device *dev, enum shift_dir dir)
-{
-    int err = 0;
-    switch (dir)
-    {
-    case left:
-        err = lcd_write_4bit(dev, LCD_SHIFT_DISPLAY_LEFT, true);
-        break;
-    case right:
-        err = lcd_write_4bit(dev, LCD_SHIFT_DISPLAY_RIGHT, true);
-        break;
-    default:
-        break;
-    }
-    return err;
+    
 }
 
-//------------------------------------------
-// print
-/**
- * @brief writes characters data to the DDRAM address
- *  specified by the set cursor function
- *
- * @param  *dev pointer to device instance
- * @param *character apointer a character array to be displayed
- * @param len length of the character array
- */
-int lcd_print(const struct device *dev, char *character, int len)
+//----------------------------------------------------------
+// set cursor position 
+uint8_t compute_ddram_addr(const struct device *dev,uint8_t x,uint8_t y)
 {
-    int r = 0;
-    for (int i = 0; i < len; ++i)
-    {
-        r=lcd_write_4bit(dev, *(character + i), false);
-        if(r<0)
-        {
-            return r;
-        }
-    }
-    return 0;
-}
-
-//--------------------------------------------
-// set_cursor
-/**
- * @brief This function sets the location of the cursor
- *
- *   i.e  DDRAM address
- * @param *dev pointer to device structure
- * @param row row of display either 0 or 1
- * @param col column to write character at between 0 and 39
- *
- */
-int lcd_set_cursor(const struct device *dev, uint8_t row, uint8_t col)
-{
-    // ensure rows are not greater than 2
     const struct lcm1602_config *const cfg = (const struct lcm1602_config *)dev->config;
-    struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
-                                      // in 1 line mode DDRAM address range [0x00 ,0x4f]
-                                      //  in 2 line mode  1st line DDRAM address range [0x00,0x27] , 2nd line address range [0x40, 0x67]
-                                      if (cfg->num_lines == 2)
+    //starting addr
+    uint8_t addr=0x00;
+   
+    if (cfg->display_mode == 2)
     {
-        // ensure the row  and column  are within range
-        if (row <= 1 && col <= 39)
+        // ensure the x  and y  are within range
+        if(y==0)
         {
-
-            if (row == 1)
+            addr=x;
+            if(addr>AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR)
             {
-                // addr range is between 0x40 to 0x67
-                col = col + 0x40;
+                addr=AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR;
             }
         }
         else
         {
-            return -EINVAL;
+            addr=AUXDISPLAY_LINE_2_START_ADDR +x;
+            if(addr>AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR)
+            {
+                addr=AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR;
+            }
         }
     }
-    if (cfg->num_lines == 1)
+    else
     {
-        if (row > 1 || col > 0x4f)
-        {
-            return -EINVAL;
-        }
+        addr=x;
+            if(addr>AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR )
+            {
+                addr=AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ;
+            }
     }
-    int r = lcd_write_4bit(dev, LCD_SET_DDRAM_ADDR | col, true);
-    // update cursor position data only after a successfull write
-    // reset cursor position
-    data->cursor_position = 0;
-    // update cursor positon
-    data->cursor_position = row | (col << 4);
+    return addr;
+}
+//--------------------------------------------
+// set_cursor
+
+int lcm1602_cursor_position_set (const struct device *dev, enum auxdisplay_position type, int16_t x, int16_t y)
+{
+    //const struct lcm1602_config *const cfg = (const struct lcm1602_config *)dev->config;
+    struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
+    uint8_t addr;
+
+
+    // Todo add checks to ensure  x and y fall within the limits of screen positions
+
+    switch (type)
+    {
+    case AUXDISPLAY_POSITION_ABSOLUTE :
+        addr=compute_ddram_addr(dev,x,y);
+        
+        data->x=(uint8_t)x;
+        data->y=(uint8_t)y;
+        break;
+    case AUXDISPLAY_POSITION_RELATIVE:
+         addr=compute_ddram_addr(dev,data->x+x,data->y+y);
+         data->x +=(uint8_t)x;
+         data->y+=(uint8_t)y;
+         break;
+    // case AUXDISPLAY_POSITION_RELATIVE_DIRECTION :
+    // break;
+    default:
+        return -ENOSYS;
+        break;
+    }
+    int r = auxdisplay_write_4bit(dev, AUXDISPLAY_SET_DDRAM_ADDR| addr , true);
+    
     return r;
 }
 
-//--------------------------------
-// create custom character
-int lcd_create_custom_char(const struct device *dev, char *rows, uint8_t addr)
+int lcm1602_cursor_position_get 	( 	const struct device * 	dev,
+		int16_t * 	x,
+		int16_t * 	y )
+
+        {
+            struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
+            *x=(int16_t)data->x;
+            *y=(int16_t)data->y;
+            return 0;
+        }
+int lcm1602_custom_character_set( 	const struct device * 	dev,
+		struct auxdisplay_character * 	character ) 
 {
+    
     int r = 0;
-    r = lcd_write_4bit(dev, LCD_SET_CGRAM_ADDR | addr, true);
+    //Each custom character slot in the LCD's CGRAM requires 8 bytes of memory (one byte per row). 
+   //if  character index is 1, this sets the address to 0x41 instead of 0x48 (0x40 + (1 * 8)).
+    //This unaligned write spills pixel data across adjacent character slots,
+    //corrupting the memory layout hence need to multiply by 8 or <<3
+    r = auxdisplay_write_4bit(dev, AUXDISPLAY_SET_CGRAM_ADDR | (character->index*8), true);
+    struct lcm1602_data *const data = (struct lcm1602_data *)dev->data;
     if (r < 0)
     {
         return r;
     }
-    // assuming address is automatically increased
+    
+   // ddram address has to be set to increase after write 
+    // for now  5x8 mode only is supported
+    /// Todo  add support for 5x8 and 5x11 mode 
     for (uint8_t i = 0; i < 8; ++i)
     {
-        r = lcd_write_4bit(dev, *(rows + i), false);
+        r = auxdisplay_write_4bit(dev,*(character->data + i), false);
         if (r < 0)
         {
             return r;
         }
     }
-    return 0;
+    r=lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,data->x, data->y);
+    r=auxdisplay_write_4bit(dev,character->index,false);
+    r=lcm1602_cursor_position_set(dev,AUXDISPLAY_POSITION_ABSOLUTE,data->x+1, data->y);
+    return r;
 }
 
-//------------------------------
-// print custom char
-/**
- * @brief prints custom character at the specified address of the CGRAM
- *
- * @param addr address of CGRAM where character to be printed id located
- *
- *  has to be a value between 0 and 7
- */
-int lcd_print_custom(const struct device *dev, uint8_t addr)
-{
-    return lcd_write_4bit(dev, addr, false);;
-}
+int lcm1602_display_position_set 	( 	const struct device * 	dev,
+		enum auxdisplay_position 	type,
+		int16_t 	x,
+		int16_t 	y )
 
-//------------------
-// clear display
-int lcd_clear(const struct device *dev)
 {
-    // Clear Display (0x01)
-    
-    return lcd_write_4bit(dev, LCD_CLEAR_DISPLAY, true);
-}
 
-//---------------------
-// return cursor to home position
-int lcd_home(const struct device *dev)
-{
+    //ignore type and y for now 
+    [[maybe_unused]] y;
+    [[maybe_unused]] type;
+    int r;
+    uint8_t cmd= x<0? AUXDISPLAY_DISPLAY_SHIFT_LEFT :AUXDISPLAY_DISPLAY_SHIFT_RIGHT;
+	for(uint8_t i=0;i<fabs(x);++i)
+	{
+		r=auxdisplay_write_4bit(dev,cmd ,true);
+        if (r<0)
+        {
+            return r;
+        }
+	}
   
-    return lcd_write_4bit(dev, LCD_RETURN_HOME, true);
+    return 0;
+	
 }
 
-int lcd_cursor(const struct device *dev, enum state state)
-{
-    int r = 0;
-    switch (state)
-    {
-    case on:
-        r = lcd_write_4bit(dev, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKOFF, true);
-        
-        break;
-    case off:
-        r = lcd_write_4bit(dev, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF, true);
-        
-    default:
-        break;
-    }
-    return r;
-}
 
-int lcd_backlight(const struct device *dev, enum state st)
-{
-    int r = 0;
-    struct lcm1602_data *const data = (struct lcm1602_data *const)dev->data;
-    const struct lcm1602_config *cfg = (const struct lcm1602_config *)dev->config;
-    switch (st)
-    {
-    case on:
-        data->lcd_backlight_state = (1 << 3);
-        r = i2c_write_dt(&cfg->i2c, &data->lcd_backlight_state, 1);
 
-        break;
-    case off:
 
-        data->lcd_backlight_state = 0;
-        r = i2c_write_dt(&cfg->i2c, &data->lcd_backlight_state, 1);
-        break;
-    default:
-        break;
-    }
-    return r;
-}
+static DEVICE_API(auxdisplay, lcm1602_api) = {
+    .display_on=lcm1602_display_on,
+    .display_off=lcm1602_display_off,
+    .cursor_set_enabled=lcm1602_cursor_set_enabled,
+    .position_blinking_set_enabled=lcm1602_position_blinking_set_enabled,
+    .cursor_shift_set=lcm1602_cursor_shift_set,
+    .cursor_position_set=lcm1602_cursor_position_set,
+    .custom_character_set=lcm1602_custom_character_set,
+    .write=lcm1602_write,
+    .display_position_set=lcm1602_display_position_set,
+    .cursor_position_get=lcm1602_cursor_position_get,
+    .clear=lcm1602_clear,
 
-// void lcd_write_instruction(uint8_t inst)
-// {
-
-//       lcd_write_4bit(inst,true);
-// }
-// void lcd_write_data(uint8_t data)
-// {
-
-//     lcd_write_4bit(data,false);
-// }
-static DEVICE_API(lcm1602, lcm1602_api) = {
-    .cursor_blink = &lcd_cursor_blink,
-    .shift_display = &lcd_display_shift,
-    .print = &lcd_print,
-    .set_cursor = &lcd_set_cursor,
-    .create_custom_char = &lcd_create_custom_char,
-    .print_custom = &lcd_print_custom,
-    .clear = &lcd_clear,
-    .home = &lcd_home,
-    .cursor = &lcd_cursor,
-    .backlight = &lcd_backlight,
-    .shift_cursor = &lcd_cursor_shift,
 
 };
-static inline int z_impl_lcd_print(const struct device *dev, char *character, int len)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->print(dev, character, len);
-}
-static inline int z_impl_lcd_set_cursor(const struct device *dev, uint8_t row, uint8_t col)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->set_cursor(dev, row, col);
-}
-static inline int z_impl_lcd_create_custom_char(const struct device *dev, char *rows, uint8_t addr)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->create_custom_char(dev, rows, addr);
-}
-static inline int z_impl_lcd_cursor_blink(const struct device *dev, enum state state)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->cursor_blink(dev, state);
-}
-
-static inline int z_impl_lcd_display_shift(const struct device *dev, enum shift_dir dir)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->shift_display(dev, dir);
-}
-
-static inline int z_impl_lcd_print_custom(const struct device *dev, uint8_t addr)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->print_custom(dev, addr);
-}
-
-static inline int z_impl_lcd_clear(const struct device *dev)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->clear(dev);
-}
-static inline int z_impl_lcd_home(const struct device *dev)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->home(dev);
-}
-
-static inline int z_impl_lcd_cursor(const struct device *dev, enum state state)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->cursor(dev, state);
-}
-static inline int z_impl_lcd_backlight(const struct device *dev, enum state st)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->backlight(dev, st);
-}
-static inline int z_impl_lcd_cursor_shift(const struct device *dev, enum shift_dir dir)
-{
-    __ASSERT_NO_MSG(DEVICE_API_IS(lcm1602, dev));
-    return DEVICE_API_GET(lcm1602, dev)->shift_cursor(dev, dir);
-}
 
 #define LCM1602_DEFINE(inst)                                     \
     static const struct lcm1602_config lcm1602_config##inst = {  \
         .i2c = I2C_DT_SPEC_INST_GET(inst),                       \
-        .num_lines = DT_PROP(DT_INST(inst, lcm1602), num_lines), \
+        .display_mode = DT_PROP(DT_INST(inst, lcm1602), display_mode), \
+        .idl=DT_PROP(DT_INST(inst, lcm1602), idl) , \
+        .dots=DT_PROP(DT_INST(inst, lcm1602), format),\
     };                                                           \
     static struct lcm1602_data lcm1602_data##inst;               \
     DEVICE_DT_INST_DEFINE(inst,                                  \
