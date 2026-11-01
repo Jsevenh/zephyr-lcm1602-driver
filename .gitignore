@@ -1,5 +1,5 @@
-liquidcrystal/build 
+sample/build 
 .vscode
-liquidcrystal/.vscode/launch.json
-liquidcrystal/.vscode/settings.json
-liquidcrystal/.vscode/c_cpp_properties.json
+sample/.vscode/launch.json
+sample/.vscode/settings.json
+sample/.vscode/c_cpp_properties.json

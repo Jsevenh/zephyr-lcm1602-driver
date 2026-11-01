@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <zephyr/drivers/i2c.h>
 
-#include "lcm1602.h"
+#include <lcm1602.h>
 
 
 int auxdisplay_write_4bit(const struct device *dev, uint8_t d, bool is_instruction);
@@ -97,29 +97,36 @@ int update_ddram_addr(const struct device *dev, uint8_t offset)
     // Compute new position in one line based on direction
     int16_t new_x = drv_data->x + (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT? offset : -offset);
 
-    if (cfg->display_mode == 1) {
-        if (new_x > AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ) new_x = AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ;
-        if (new_x < 0)     new_x = 0;
-    } else {
-        if (drv_data->y == 0) {
-            if (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT&& new_x > AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR) {
-                //  store difference between  max address on line 1 and new_x 
+    if (cfg->display_mode == 1) 
+    {
+        new_x=fmax(0,fmod(new_x,AUXDISPLAY_MODE_1_LINE_1_MAX_ADDR ));
+    } else 
+    {
+        if (drv_data->y == 0) 
+        {
+            if (new_x > AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR)
+            {
                 // position data is not stored as addresses but as x,y positions
-                // e.g x=0,y=1 represents address 0x40
-                new_x -= AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR;
-                new_x-=1;
+            // e.g x=0,y=1 represents address 0x40
+            new_x=fmax(0,fmod(new_x,AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR))-1;
                 // update y to  next line 
-                drv_data->y = 1;
-            } else if (new_x < 0) {
-                new_x = 0;
+               drv_data->y = 1;
+            } 
+              
+        } 
+        else {
+            if (new_x < AUXDISPLAY_LINE_2_START_ADDR) {
+                drv_data->y=0;
+            } 
+            else if(new_x>AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR)
+            {
+                 new_x=fmod(new_x,AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR)-1;
+                 drv_data->y=0;
             }
-        } else {
-            if (drv_data->dir==AUXDISPLAY_DIRECTION_RIGHT&& new_x > AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR) {
-                new_x = AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR;
-            } else if (drv_data->dir!=AUXDISPLAY_DIRECTION_RIGHT && new_x < AUXDISPLAY_LINE_2_START_ADDR) {
-                new_x = AUXDISPLAY_MODE_2_LINE_1_MAX_ADDR;
-                drv_data->y = 0;
+            else{
+                new_x=fmod(new_x,AUXDISPLAY_MODE_2_LINE_2_MAX_ADDR);
             }
+            
         }
     }
 
